@@ -1,0 +1,184 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  vpc089014ea9c553180d:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      InstanceTenancy: default
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'false'
+      Tags:
+      - Key: Name
+        Value: Perforce
+  subnet04731f3d427d1b04f:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: ap-northeast-1a
+      VpcId:
+        Ref: vpc089014ea9c553180d
+      Tags:
+      - Key: Name
+        Value: Perforce-Public-Subnet
+  igw06ff7ac884deea506:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: Public-Perforce
+  dopt06d06862:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: ap-northeast-1.compute.internal
+      DomainNameServers:
+      - AmazonProvidedDNS
+  acl0dc84171401f0d22f:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+  rtb04fd13c1658e30807:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+  eip1817754170:
+    Type: AWS::EC2::EIP
+    DependsOn:
+    - gw1
+    Properties:
+      Domain: vpc
+  instancei094428780f474b671:
+    Type: AWS::EC2::Instance
+    Properties:
+      DisableApiTermination: 'false'
+      InstanceInitiatedShutdownBehavior: stop
+      EbsOptimized: 'true'
+      ImageId: ami-0e5b4896543900e46
+      InstanceType: c5.4xlarge
+      KeyName: general-key
+      Monitoring: 'true'
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-01
+      - Key: Description
+        Value: Master/commit server. The .1 is the SDP instance name, a data set identifier.
+      - Key: ServerID
+        Value: master.1
+      NetworkInterfaces:
+      - DeleteOnTermination: 'true'
+        Description: Primary network interface
+        DeviceIndex: 0
+        SubnetId:
+          Ref: subnet04731f3d427d1b04f
+        PrivateIpAddresses:
+        - PrivateIpAddress: 10.0.0.63
+          Primary: 'true'
+        GroupSet:
+        - Ref: sgPerforceSG
+  sgPerforceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: This security group is for Perforce.
+      VpcId:
+        Ref: vpc089014ea9c553180d
+  acl1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: 'true'
+      Protocol: '-1'
+      RuleAction: allow
+      RuleNumber: '100'
+      NetworkAclId:
+        Ref: acl0dc84171401f0d22f
+  acl2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Protocol: '-1'
+      RuleAction: allow
+      RuleNumber: '100'
+      NetworkAclId:
+        Ref: acl0dc84171401f0d22f
+  subnetacl1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId:
+        Ref: acl0dc84171401f0d22f
+      SubnetId:
+        Ref: subnet04731f3d427d1b04f
+  gw1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+      InternetGatewayId:
+        Ref: igw06ff7ac884deea506
+  route1:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId:
+        Ref: rtb04fd13c1658e30807
+      GatewayId:
+        Ref: igw06ff7ac884deea506
+    DependsOn: gw1
+  subnetrtbassoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId:
+        Ref: rtb04fd13c1658e30807
+      SubnetId:
+        Ref: subnet04731f3d427d1b04f
+  dchpassoc1:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+      DhcpOptionsId:
+        Ref: dopt06d06862
+  assoc1:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - eip1817754170
+        - AllocationId
+      InstanceId:
+        Ref: instancei094428780f474b671
+  ingress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '22'
+      ToPort: '22'
+      CidrIp: 0.0.0.0/0
+  ingress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '443'
+      ToPort: '443'
+      CidrIp: 0.0.0.0/0
+  ingress3:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '1666'
+      ToPort: '1666'
+      CidrIp: 0.0.0.0/0
+  egress1:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: '-1'
+      CidrIp: 0.0.0.0/0
+Description: Perforce-server

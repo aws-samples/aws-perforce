@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  vpc089014ea9c553180d:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      InstanceTenancy: default
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'false'
+      Tags:
+      - Key: Name
+        Value: Perforce
+  subnet04731f3d427d1b04f:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: ap-northeast-1a
+      VpcId:
+        Ref: vpc089014ea9c553180d
+      Tags:
+      - Key: Name
+        Value: Perforce-Public-Subnet
+  igw06ff7ac884deea506:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: Public-Perforce
+  dopt06d06862:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: ap-northeast-1.compute.internal
+      DomainNameServers:
+      - AmazonProvidedDNS
+  acl0dc84171401f0d22f:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+  rtb04fd13c1658e30807:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+  eip1817754170:
+    Type: AWS::EC2::EIP
+    DependsOn:
+    - gw1
+    Properties:
+      Domain: vpc
+  instancei094428780f474b671:
+    Type: AWS::EC2::Instance
+    Properties:
+      DisableApiTermination: 'false'
+      InstanceInitiatedShutdownBehavior: stop
+      EbsOptimized: 'true'
+      ImageId: ami-011facbea5ec0363b
+      InstanceType: c5.4xlarge
+      KeyName: general-key
+      Monitoring: 'true'
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-01
+      - Key: Description
+        Value: Master/commit server. The .1 is the SDP instance name, a data set identifier.
+      - Key: ServerID
+        Value: master.1
+      Volumes:
+      - Device: /dev/sdb
+        VolumeId:
+          Ref: volumevol0b2bb44d5217cfbcb
+      - Device: /dev/sdc
+        VolumeId:
+          Ref: volumevol08d6bdcd7784b118d
+      - Device: /dev/sdd
+        VolumeId:
+          Ref: volumevol0bd89c83ae9f3e9a1
+      NetworkInterfaces:
+      - DeleteOnTermination: 'true'
+        Description: Primary network interface
+        DeviceIndex: 0
+        SubnetId:
+          Ref: subnet04731f3d427d1b04f
+        PrivateIpAddresses:
+        - PrivateIpAddress: 10.0.0.63
+          Primary: 'true'
+        GroupSet:
+        - Ref: sgPerforceSG
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash
+          # Mount hxdepots
+          mkfs -t xfs /dev/nvme2n1
+          mkdir /hxdepots
+          mount /dev/nvme2n1 /hxdepots
+
+          # Mount hxlogs
+          mkfs -t xfs /dev/nvme3n1
+          mkdir /hxlogs
+          mount /dev/nvme3n1 /hxlogs
+
+          # Mount hxmetadata
+          mkfs -t xfs /dev/nvme1n1
+          mkdir /hxmetadata
+          mount /dev/nvme1n1 /hxmetadata
+
+          # Configure /etc/fstab
+
+          # Add yum repository
+          cat << EOT >> /etc/yum.repos.d/perforce.repo
+          [perforce]
+          name=Perforce
+          baseurl=http://package.perforce.com/yum/rhel/7/x86_64/
+          enabled=1
+          gpgcheck=1
+          EOT
+
+          rpm --import https://package.perforce.com/perforce.pubkey
+
+          # Install packages 
+          yum -y update
+          # yum install helix-p4d
+
+          yum -y install aws-cfn-bootstrap
+          # Install the files and packages from the metadata
+          # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-init.html
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource instancei094428780f474b671 --region ${AWS::Region}
+          # Signal the status from cfn-init
+          # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-signal.html
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource instancei094428780f474b671 --region ${AWS::Region} 
+
+          # Make user p4admin
+          # adduser -g perforce -G adm,wheel p4admin
+          # mkdir /home/p4admin/.ssh
+          # cp /home/ec2-user/.ssh/authorized_keys /home/p4admin/.ssh
+          # chown p4admin:perforce --recursive /home/p4admin/.ssh
+          # chmod 700 /home/p4admin/.ssh
+          # chmod 600 /home/p4admin/.ssh/authorized_keys
+    Metadata:
+      # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              helix-p4d: []
+          commands:
+            01_adduser_p4admin:
+              command: adduser -g perforce -G adm,wheel p4admin
+              ignoreErrors: false
+            02_mkdir_p4admin_dir:
+              command: mkdir /home/p4admin/.ssh
+              ignoreErrors: false
+            03_cp_key:
+              command: cp /home/ec2-user/.ssh/authorized_keys /home/p4admin/.ssh
+              ignoreErrors: false
+            04_chown:
+              command: chown p4admin:perforce --recursive /home/p4admin/.ssh
+              ignoreErrors: false
+            05_chmod:
+              command: chmod 700 /home/p4admin/.ssh
+              ignoreErrors: false
+            06_chmod:
+              command: chmod 600 /home/p4admin/.ssh/authorized_keys
+              ignoreErrors: false
+#          files:
+#            # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-hup.html
+#            /etc/cfn/cfn-hup.conf:
+#              content: !Sub |
+#                [main]
+#                stack=${AWS::StackId}
+#                region=${AWS::Region}
+#              mode: '000400'
+#              owner: root
+#              group: root
+#            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+#              content: !Sub |
+#                [cfn-auto-reloader-hook]
+#                triggers=post.update
+#                path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init
+#                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+#                runas=root
+#              mode: '000400'
+#              owner: root
+#              group: root
+#          commands:
+#            01_set_timezone:
+#              command: timedatectl set-timezone Asia/Tokyo
+#              ignoreErrors: false
+#            02_install_composer:
+#              command: /usr/bin/curl -s https://getcomposer.org/installer | /usr/bin/php && mv composer.phar /usr/local/bin/composer
+#              env:
+#                HOME: /root
+#              cwd: '~'
+#              test: test ! -e /usr/local/bin/composer
+#              ignoreErrors: false
+#          services:
+#            sysvinit:
+#              httpd:
+#                enabled: true
+#                ensureRunning: true
+#              cfn-hup:
+#                enabled: true
+#                ensureRunning: true
+#                files:
+#                  - /etc/cfn/cfn-hup.conf
+#                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+  volumevol08d6bdcd7784b118d:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      Size: '128'
+      VolumeType: gp2
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-01-hxlogs
+      - Key: ServerID
+        Value: master.1
+  volumevol0b2bb44d5217cfbcb:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      Encrypted: true
+      Size: '1024'
+      VolumeType: st1
+      Tags:
+      - Key: ServerID
+        Value: master.1
+      - Key: Name
+        Value: p4-awsnva-01-hxdepots
+  volumevol0bd89c83ae9f3e9a1:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      Size: '64'
+      VolumeType: gp2
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-01- hxmetadata
+      - Key: ServerID
+        Value: master.1
+  sgPerforceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: This security group is for Perforce.
+      VpcId:
+        Ref: vpc089014ea9c553180d
+  acl1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: 'true'
+      Protocol: '-1'
+      RuleAction: allow
+      RuleNumber: '100'
+      NetworkAclId:
+        Ref: acl0dc84171401f0d22f
+  acl2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Protocol: '-1'
+      RuleAction: allow
+      RuleNumber: '100'
+      NetworkAclId:
+        Ref: acl0dc84171401f0d22f
+  subnetacl1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId:
+        Ref: acl0dc84171401f0d22f
+      SubnetId:
+        Ref: subnet04731f3d427d1b04f
+  gw1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+      InternetGatewayId:
+        Ref: igw06ff7ac884deea506
+  route1:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId:
+        Ref: rtb04fd13c1658e30807
+      GatewayId:
+        Ref: igw06ff7ac884deea506
+    DependsOn: gw1
+  subnetrtbassoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId:
+        Ref: rtb04fd13c1658e30807
+      SubnetId:
+        Ref: subnet04731f3d427d1b04f
+  dchpassoc1:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId:
+        Ref: vpc089014ea9c553180d
+      DhcpOptionsId:
+        Ref: dopt06d06862
+  assoc1:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - eip1817754170
+        - AllocationId
+      InstanceId:
+        Ref: instancei094428780f474b671
+  ingress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '22'
+      ToPort: '22'
+      CidrIp: 0.0.0.0/0
+  ingress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '443'
+      ToPort: '443'
+      CidrIp: 0.0.0.0/0
+  ingress3:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '1666'
+      ToPort: '1666'
+      CidrIp: 0.0.0.0/0
+  egress1:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: '-1'
+      CidrIp: 0.0.0.0/0
+Description: Perforce-server
