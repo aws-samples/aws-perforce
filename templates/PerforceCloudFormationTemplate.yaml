@@ -124,22 +124,19 @@ Resources:
           yum -y install aws-cfn-bootstrap
           # Install the files and packages from the metadata
           # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-init.html
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource instancei094428780f474b671 --region ${AWS::Region}
+          /opt/aws/bin/cfn-init -v --configsets default --stack ${AWS::StackName} --resource instancei094428780f474b671 --region ${AWS::Region}
           # Signal the status from cfn-init
           # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-signal.html
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource instancei094428780f474b671 --region ${AWS::Region} 
 
-          # Make user p4admin
-          # adduser -g perforce -G adm,wheel p4admin
-          # mkdir /home/p4admin/.ssh
-          # cp /home/ec2-user/.ssh/authorized_keys /home/p4admin/.ssh
-          # chown p4admin:perforce --recursive /home/p4admin/.ssh
-          # chmod 700 /home/p4admin/.ssh
-          # chmod 600 /home/p4admin/.ssh/authorized_keys
     Metadata:
       # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
       AWS::CloudFormation::Init:
-        config:
+        configSets: 
+          default: 
+            - "01_config_helix-p4d"
+            - "02_config_install_sdp"
+        01_config_helix-p4d:
           packages:
             yum:
               helix-p4d: []
@@ -162,16 +159,45 @@ Resources:
             06_chmod:
               command: chmod 600 /home/p4admin/.ssh/authorized_keys
               ignoreErrors: false
-#          files:
-#            # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-hup.html
-#            /etc/cfn/cfn-hup.conf:
-#              content: !Sub |
-#                [main]
-#                stack=${AWS::StackId}
-#                region=${AWS::Region}
-#              mode: '000400'
-#              owner: root
-#              group: root
+            07_allow_p4admin_sudo:
+              command: "echo 'p4admin         ALL=(ALL)       NOPASSWD: ALL' >> /etc/sudoers"
+        02_config_install_sdp:
+          sources:
+            /tmp: "https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/sdp.Unix.2019.3.26239.tgz"
+          commands:
+            01_mv_sdp:
+              command: mv /tmp/sdp /hxdepots
+              ignoreErrors: false
+            02_backup_config:
+              command: cp /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg.bak
+              ignoreErrors: false
+            03_rewrite_config:
+              command: "sudo sed -i -e 's/DB1=.*/DB1=hxmetadata/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            04_rewrite_config:
+              command: "sed -i -e 's/DB2=.*/DB2=hxmetadata/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            05_rewrite_config:
+              command: "sed -i -e 's/DD=.*/DD=hxdepots/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            06_rewrite_config:
+              command: "sed -i -e 's/LG=.*/LG=hxlogs/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            07_rewrite_config:
+              command: "sed -i -e 's/OSUSER=.*/OSUSER=p4admin/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            08_rewrite_config:
+              command: "sed -i -e 's/OSGROUP=.*/OSGROUP=perforce/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            09_rewrite_config:
+              command: "sed -i -e 's/MAILHOST=.*/MAILHOST=localhost/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            10_rewrite_config:
+              command: "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            11_rewrite_config:
+              command: "sed -i -e 's/COMPLAINFROM_DOMAIN=.*/COMPLAINFROM_DOMAIN=amazonaws.com/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
 #            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
 #              content: !Sub |
 #                [cfn-auto-reloader-hook]
