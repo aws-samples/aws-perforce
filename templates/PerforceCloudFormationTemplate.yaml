@@ -119,7 +119,6 @@ Resources:
 
           # Install packages 
           yum -y update
-          # yum install helix-p4d
 
           yum -y install aws-cfn-bootstrap
           # Install the files and packages from the metadata
@@ -136,28 +135,29 @@ Resources:
           default: 
             - "01_config_helix-p4d"
             - "02_config_install_sdp"
+            - "03_config_start_helix-p4d"
         01_config_helix-p4d:
           packages:
             yum:
               helix-p4d: []
           commands:
             01_adduser_p4admin:
-              command: adduser -g perforce -G adm,wheel p4admin
+              command: "adduser -g perforce -G adm,wheel p4admin"
               ignoreErrors: false
             02_mkdir_p4admin_dir:
-              command: mkdir /home/p4admin/.ssh
+              command: "mkdir /home/p4admin/.ssh"
               ignoreErrors: false
             03_cp_key:
-              command: cp /home/ec2-user/.ssh/authorized_keys /home/p4admin/.ssh
+              command: "cp /home/ec2-user/.ssh/authorized_keys /home/p4admin/.ssh"
               ignoreErrors: false
             04_chown:
-              command: chown p4admin:perforce --recursive /home/p4admin/.ssh
+              command: "chown p4admin:perforce --recursive /home/p4admin/.ssh"
               ignoreErrors: false
             05_chmod:
-              command: chmod 700 /home/p4admin/.ssh
+              command: "chmod 700 /home/p4admin/.ssh"
               ignoreErrors: false
             06_chmod:
-              command: chmod 600 /home/p4admin/.ssh/authorized_keys
+              command: "chmod 600 /home/p4admin/.ssh/authorized_keys"
               ignoreErrors: false
             07_allow_p4admin_sudo:
               command: "echo 'p4admin         ALL=(ALL)       NOPASSWD: ALL' >> /etc/sudoers"
@@ -166,10 +166,10 @@ Resources:
             /tmp: "https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/sdp.Unix.2019.3.26239.tgz"
           commands:
             01_mv_sdp:
-              command: mv /tmp/sdp /hxdepots
+              command: "mv /tmp/sdp /hxdepots"
               ignoreErrors: false
             02_backup_config:
-              command: cp /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg.bak
+              command: "cp /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg.bak"
               ignoreErrors: false
             03_rewrite_config:
               command: "sudo sed -i -e 's/DB1=.*/DB1=hxmetadata/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
@@ -193,43 +193,56 @@ Resources:
               command: "sed -i -e 's/MAILHOST=.*/MAILHOST=localhost/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             10_rewrite_config:
-              command: "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              command: "sed -i -e 's/SSL_PREFIX=.*/SSL_PREFIX=/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             11_rewrite_config:
+              command: "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=ip-10-0-0-63.ap-northeast-1.compute.internal/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            12_rewrite_config:
               command: "sed -i -e 's/COMPLAINFROM_DOMAIN=.*/COMPLAINFROM_DOMAIN=amazonaws.com/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
-#            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-#              content: !Sub |
-#                [cfn-auto-reloader-hook]
-#                triggers=post.update
-#                path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init
-#                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
-#                runas=root
-#              mode: '000400'
-#              owner: root
-#              group: root
-#          commands:
-#            01_set_timezone:
-#              command: timedatectl set-timezone Asia/Tokyo
-#              ignoreErrors: false
-#            02_install_composer:
-#              command: /usr/bin/curl -s https://getcomposer.org/installer | /usr/bin/php && mv composer.phar /usr/local/bin/composer
-#              env:
-#                HOME: /root
-#              cwd: '~'
-#              test: test ! -e /usr/local/bin/composer
-#              ignoreErrors: false
-#          services:
-#            sysvinit:
-#              httpd:
-#                enabled: true
-#                ensureRunning: true
-#              cfn-hup:
-#                enabled: true
-#                ensureRunning: true
-#                files:
-#                  - /etc/cfn/cfn-hup.conf
-#                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+            13_create_symlink:
+              command: "ln -s /opt/perforce/bin/p4 /hxdepots/sdp/Server/Unix/p4/common/bin/p4"
+              ignoreErrors: false
+            14_create_symlink:
+              command: "ln -s /opt/perforce/sbin/p4d /hxdepots/sdp/Server/Unix/p4/common/bin/p4d"
+              ignoreErrors: false
+            15_setup_sdp:
+              command: "/hxdepots/sdp/Server/Unix/setup/mkdirs.sh 1"
+              ignoreErrors: false
+        03_config_start_helix-p4d:
+          files: 
+            /etc/systemd/system/p4d_1.service: 
+              content: !Sub | 
+                [Unit]
+                Description=Helix Server Instance 1
+                Documentation=http://www.perforce.com/perforce/doc.current/manuals/p4sag/index.html
+                Requires=network.target network-online.target
+                After=network.target network-online.target
+
+                [Service]
+                Type=forking
+                TimeoutStartSec=60s
+                TimeoutStopSec=60s
+                ExecStart=/p4/1/bin/p4d_1_init start
+                ExecStop=/p4/1/bin/p4d_1_init stop
+                User=p4admin
+
+                [Install]
+                WantedBy=multi-user.target
+              mode: "000400"
+              owner: "p4admin"
+              group: "perforce"
+          commands:
+            01_enable_daemon:
+              command: "systemctl enable p4d_1"
+              ignoreErrors: false
+            02_start_daemon:
+              command: "systemctl start p4d_1"
+              ignoreErrors: false
+            03_configure_server:
+              command: "/hxdepots/sdp/Server/setup/configure_new_server.sh 1"
+              ignoreErrors: false
   volumevol08d6bdcd7784b118d:
     Type: AWS::EC2::Volume
     Properties:
