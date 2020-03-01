@@ -68,13 +68,13 @@ Resources:
       Volumes:
       - Device: /dev/sdb
         VolumeId:
-          Ref: volumevol0b2bb44d5217cfbcb
+          Ref: VolumeHxdepots
       - Device: /dev/sdc
         VolumeId:
-          Ref: volumevol08d6bdcd7784b118d
+          Ref: VolumeHxlogs
       - Device: /dev/sdd
         VolumeId:
-          Ref: volumevol0bd89c83ae9f3e9a1
+          Ref: VolumeHxmetadata
       NetworkInterfaces:
       - DeleteOnTermination: 'true'
         Description: Primary network interface
@@ -89,34 +89,6 @@ Resources:
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash
-          # Mount hxdepots
-          mkfs -t xfs /dev/nvme2n1
-          mkdir /hxdepots
-          mount /dev/nvme2n1 /hxdepots
-
-          # Mount hxlogs
-          mkfs -t xfs /dev/nvme3n1
-          mkdir /hxlogs
-          mount /dev/nvme3n1 /hxlogs
-
-          # Mount hxmetadata
-          mkfs -t xfs /dev/nvme1n1
-          mkdir /hxmetadata
-          mount /dev/nvme1n1 /hxmetadata
-
-          # Configure /etc/fstab
-
-          # Add yum repository
-          cat << EOT >> /etc/yum.repos.d/perforce.repo
-          [perforce]
-          name=Perforce
-          baseurl=http://package.perforce.com/yum/rhel/7/x86_64/
-          enabled=1
-          gpgcheck=1
-          EOT
-
-          rpm --import https://package.perforce.com/perforce.pubkey
-
           # Install packages 
           yum -y update
 
@@ -133,10 +105,44 @@ Resources:
       AWS::CloudFormation::Init:
         configSets: 
           default: 
-            - "01_config_helix-p4d"
-            - "02_config_install_sdp"
-            - "03_config_start_helix-p4d"
-        01_config_helix-p4d:
+            - "01_config_setup_volumes"
+            - "02_config_setup_yum_repo"
+            - "03_config_helix-p4d"
+            - "04_config_install_sdp"
+            - "05_config_start_helix-p4d"
+        01_config_setup_volumes:
+          commands:
+            # Mount hxdepots
+            01_setup_hxdepots:
+              command: "mkfs -t xfs /dev/sdb && mkdir /hxdepots && mount /dev/sdb /hxdepots"
+              ignoreErrors: false
+            # Mount hxlogs
+            02_setup_hxlogs:
+              command: "mkfs -t xfs /dev/sdc && mkdir /hxlogs && mount /dev/sdc /hxlogs"
+              ignoreErrors: false
+            # Mount hxmetadata
+            03_setup_hxmetadata:
+              command: "mkfs -t xfs /dev/sdd && mkdir /hxmetadata && mount /dev/sdd /hxmetadata"
+              ignoreErrors: false
+            # Configure /etc/fstab
+        02_config_setup_yum_repo:
+          # Add yum repository
+          files: 
+            /etc/yum.repos.d/perforce.repo: 
+              content: !Sub | 
+                [perforce]
+                name=Perforce
+                baseurl=http://package.perforce.com/yum/rhel/7/x86_64/
+                enabled=1
+                gpgcheck=1
+              mode: "000644"
+              owner: "root"
+              group: "root"
+          commands:
+            01_import_pubkey:
+              command: "rpm --import https://package.perforce.com/perforce.pubkey"
+              ignoreErrors: false
+        03_config_helix-p4d:
           packages:
             yum:
               helix-p4d: []
@@ -161,7 +167,8 @@ Resources:
               ignoreErrors: false
             07_allow_p4admin_sudo:
               command: "echo 'p4admin         ALL=(ALL)       NOPASSWD: ALL' >> /etc/sudoers"
-        02_config_install_sdp:
+              ignoreErrors: false
+        04_config_install_sdp:
           sources:
             /tmp: "https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/sdp.Unix.2019.3.26239.tgz"
           commands:
@@ -210,7 +217,7 @@ Resources:
             15_setup_sdp:
               command: "/hxdepots/sdp/Server/Unix/setup/mkdirs.sh 1"
               ignoreErrors: false
-        03_config_start_helix-p4d:
+        05_config_start_helix-p4d:
           files: 
             /etc/systemd/system/p4d_1.service: 
               content: !Sub | 
@@ -243,7 +250,7 @@ Resources:
             03_configure_server:
               command: "/hxdepots/sdp/Server/setup/configure_new_server.sh 1"
               ignoreErrors: false
-  volumevol08d6bdcd7784b118d:
+  VolumeHxlogs:
     Type: AWS::EC2::Volume
     Properties:
       AvailabilityZone: ap-northeast-1a
@@ -254,7 +261,7 @@ Resources:
         Value: p4-awsnva-01-hxlogs
       - Key: ServerID
         Value: master.1
-  volumevol0b2bb44d5217cfbcb:
+  VolumeHxdepots:
     Type: AWS::EC2::Volume
     Properties:
       AvailabilityZone: ap-northeast-1a
@@ -266,7 +273,7 @@ Resources:
         Value: master.1
       - Key: Name
         Value: p4-awsnva-01-hxdepots
-  volumevol0bd89c83ae9f3e9a1:
+  VolumeHxmetadata:
     Type: AWS::EC2::Volume
     Properties:
       AvailabilityZone: ap-northeast-1a
@@ -274,7 +281,7 @@ Resources:
       VolumeType: gp2
       Tags:
       - Key: Name
-        Value: p4-awsnva-01- hxmetadata
+        Value: p4-awsnva-01-hxmetadata
       - Key: ServerID
         Value: master.1
   sgPerforceSG:
