@@ -85,7 +85,7 @@ Parameters:
     Type: "String"
 
 Resources:
-  vpc089014ea9c553180d:
+  PerforceVPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.0.0.0/16
@@ -95,17 +95,17 @@ Resources:
       Tags:
       - Key: Name
         Value: Perforce
-  subnet04731f3d427d1b04f:
+  PerforcePublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       CidrBlock: 10.0.0.0/24
       AvailabilityZone: ap-northeast-1a
       VpcId:
-        Ref: vpc089014ea9c553180d
+        Ref: PerforceVPC
       Tags:
       - Key: Name
         Value: Perforce-Public-Subnet
-  igw06ff7ac884deea506:
+  PerforceIGW:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
@@ -117,23 +117,23 @@ Resources:
       DomainName: ap-northeast-1.compute.internal
       DomainNameServers:
       - AmazonProvidedDNS
-  acl0dc84171401f0d22f:
+  PerforceNACL:
     Type: AWS::EC2::NetworkAcl
     Properties:
       VpcId:
-        Ref: vpc089014ea9c553180d
-  rtb04fd13c1658e30807:
+        Ref: PerforceVPC
+  PerforceRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId:
-        Ref: vpc089014ea9c553180d
-  eip1817754170:
+        Ref: PerforceVPC
+  PerforceEIP:
     Type: AWS::EC2::EIP
     DependsOn:
     - gw1
     Properties:
       Domain: vpc
-  instancei094428780f474b671:
+  PerforceMasterCommitServerInstance:
     Type: AWS::EC2::Instance
     Properties:
       DisableApiTermination: 'false'
@@ -168,7 +168,7 @@ Resources:
         Description: Primary network interface
         DeviceIndex: 0
         SubnetId:
-          Ref: subnet04731f3d427d1b04f
+          Ref: PerforcePublicSubnet
         PrivateIpAddresses:
         - PrivateIpAddress: 10.0.0.63
           Primary: 'true'
@@ -183,10 +183,10 @@ Resources:
           yum -y install aws-cfn-bootstrap
           # Install the files and packages from the metadata
           # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-init.html
-          /opt/aws/bin/cfn-init -v --configsets default --stack ${AWS::StackName} --resource instancei094428780f474b671 --region ${AWS::Region}
+          /opt/aws/bin/cfn-init -v --configsets default --stack ${AWS::StackName} --resource PerforceMasterCommitServerInstance --region ${AWS::Region}
           # Signal the status from cfn-init
           # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-signal.html
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource instancei094428780f474b671 --region ${AWS::Region} 
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource PerforceMasterCommitServerInstance --region ${AWS::Region} 
 
     Metadata:
       # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
@@ -393,7 +393,7 @@ Resources:
     Properties:
       GroupDescription: This security group is for Perforce.
       VpcId:
-        Ref: vpc089014ea9c553180d
+        Ref: PerforceVPC
   acl1:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -403,7 +403,7 @@ Resources:
       RuleAction: allow
       RuleNumber: '100'
       NetworkAclId:
-        Ref: acl0dc84171401f0d22f
+        Ref: PerforceNACL
   acl2:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -412,42 +412,42 @@ Resources:
       RuleAction: allow
       RuleNumber: '100'
       NetworkAclId:
-        Ref: acl0dc84171401f0d22f
+        Ref: PerforceNACL
   subnetacl1:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       NetworkAclId:
-        Ref: acl0dc84171401f0d22f
+        Ref: PerforceNACL
       SubnetId:
-        Ref: subnet04731f3d427d1b04f
+        Ref: PerforcePublicSubnet
   gw1:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId:
-        Ref: vpc089014ea9c553180d
+        Ref: PerforceVPC
       InternetGatewayId:
-        Ref: igw06ff7ac884deea506
+        Ref: PerforceIGW
   route1:
     Type: AWS::EC2::Route
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
       RouteTableId:
-        Ref: rtb04fd13c1658e30807
+        Ref: PerforceRouteTable
       GatewayId:
-        Ref: igw06ff7ac884deea506
+        Ref: PerforceIGW
     DependsOn: gw1
   subnetrtbassoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties: 
       RouteTableId:
-        Ref: rtb04fd13c1658e30807
+        Ref: PerforceRouteTable
       SubnetId:
-        Ref: subnet04731f3d427d1b04f
+        Ref: PerforcePublicSubnet
   dchpassoc1:
     Type: AWS::EC2::VPCDHCPOptionsAssociation
     Properties:
       VpcId:
-        Ref: vpc089014ea9c553180d
+        Ref: PerforceVPC
       DhcpOptionsId:
         Ref: dopt06d06862
   assoc1:
@@ -455,10 +455,10 @@ Resources:
     Properties:
       AllocationId:
         Fn::GetAtt:
-        - eip1817754170
+        - PerforceEIP
         - AllocationId
       InstanceId:
-        Ref: instancei094428780f474b671
+        Ref: PerforceMasterCommitServerInstance
   ingress1:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
