@@ -1,4 +1,89 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "Perforce Server Configuration"
+        Parameters: 
+          - InstanceType
+          - KeyPairName
+          - DepotVolumeType
+          - DepotVolumeSize
+          - LogVolumeSize
+          - MetadataVolumeType
+          - MetadataVolumeSize
+          - MetadataProvisionedIops
+          - LatestAmiId
+    ParameterLabels: 
+      InstanceType: 
+        default: "Instance Type"
+      KeyPairName:
+        default: "Key Pair Name"
+      DepotVolumeType:
+        default: "Volume Type for Depot"
+      DepotVolumeSize:
+        default: "Volume Size for Depot"
+      LogVolumeSize:
+        default: "Volume Size for Log"
+      MetadataVolumeType:
+        default: "Volume Type for Metadata"
+      MetadataVolumeSize:
+        default: "Volume Size for Metadata"
+      MetadataProvisionedIops:
+        default: "Provisioned IOPS for Metadata Volume"
+      LatestAmiId:
+        default: "Latest AMI ID for Amazon Linux2"
+
+Parameters: 
+  InstanceType: 
+    Type: String
+    Default: c5.4xlarge
+    AllowedValues: 
+      - c5.2xlarge
+      - c5.4xlarge
+      - r5.2xlarge
+      - r5.4xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+    Description: "Select Perforce server EC2 instance type. Default is c5.4xlarge."
+  KeyPairName:
+    Description: "Public/private key pairs allow you to securely connect to your instance after it launches"
+    Type: AWS::EC2::KeyPair::KeyName
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  DepotVolumeType:
+    Type: String
+    Default: st1
+    AllowedValues: 
+      - st1
+      - gp2
+    Description: "Select either ST1 or GP2."
+  DepotVolumeSize:
+    Type: String
+    Default: '1024'
+    Description: "The size of the EBS volume attached for Depot"
+  LogVolumeSize:
+    Type: String
+    Default: '128'
+    Description: "The size of the EBS volume attached for Log"
+  MetadataVolumeType:
+    Type: String
+    Default: gp2
+    AllowedValues: 
+      - gp2
+      - io1
+    Description: "Select either GP2 or IO1."
+  MetadataVolumeSize:
+    Type: String
+    Default: '64'
+    Description: "The size of the EBS volume attached for Metadata"
+  MetadataProvisionedIops:
+    ConstraintDescription: "Range is 100 to 64000 for Provisioned IOPS SSD volumes"
+    Description: "Set the provisioned IOPs between 100 and 64000. Only set if you are choosing io1 for your metadata volume type"
+    Type: "String"
+
 Resources:
   vpc089014ea9c553180d:
     Type: AWS::EC2::VPC
@@ -54,15 +139,18 @@ Resources:
       DisableApiTermination: 'false'
       InstanceInitiatedShutdownBehavior: stop
       EbsOptimized: 'true'
-      ImageId: ami-011facbea5ec0363b
-      InstanceType: c5.4xlarge
-      KeyName: general-key
+      ImageId:
+        Ref: LatestAmiId
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyPairName
       Monitoring: 'true'
       Tags:
       - Key: Name
         Value: p4-awsnva-01
       - Key: Description
-        Value: Master/commit server. The .1 is the SDP instance name, a data set identifier.
+        Value: "Master/commit server. The master.1 is the SDP instance name, a data set identifier."
       - Key: ServerID
         Value: master.1
       Volumes:
@@ -263,7 +351,8 @@ Resources:
     Type: AWS::EC2::Volume
     Properties:
       AvailabilityZone: ap-northeast-1a
-      Size: '128'
+      Size:
+        Ref: LogVolumeSize
       VolumeType: gp2
       Tags:
       - Key: Name
@@ -275,8 +364,10 @@ Resources:
     Properties:
       AvailabilityZone: ap-northeast-1a
       Encrypted: true
-      Size: '1024'
-      VolumeType: st1
+      Size:
+        Ref: DepotVolumeSize
+      VolumeType:
+        Ref: DepotVolumeType
       Tags:
       - Key: ServerID
         Value: master.1
@@ -286,8 +377,12 @@ Resources:
     Type: AWS::EC2::Volume
     Properties:
       AvailabilityZone: ap-northeast-1a
-      Size: '64'
-      VolumeType: gp2
+      Size:
+        Ref: MetadataVolumeSize
+      VolumeType:
+        Ref: MetadataVolumeType
+      Iops:
+        Ref: MetadataProvisionedIops
       Tags:
       - Key: Name
         Value: p4-awsnva-01-hxmetadata
