@@ -125,6 +125,15 @@ Resources:
               command: "mkfs -t xfs /dev/sdd && mkdir /hxmetadata && mount /dev/sdd /hxmetadata"
               ignoreErrors: false
             # Configure /etc/fstab
+            04_add_config_to_fstab:
+              command: blkid /dev/sdb | awk -v OFS="   " '{print $2,"/hxdepots","xfs","defaults,nofail","0","2"}' >> /etc/fstab
+              ignoreErrors: false
+            05_add_config_to_fstab:
+              command: blkid /dev/sdc | awk -v OFS="   " '{print $2,"/hxlogs","xfs","defaults,nofail","0","2"}' >> /etc/fstab
+              ignoreErrors: false
+            06_add_config_to_fstab:
+              command: blkid /dev/sdd | awk -v OFS="   " '{print $2,"/hxmetadata","xfs","defaults,nofail","0","2"}' >> /etc/fstab
+              ignoreErrors: false
         02_config_setup_yum_repo:
           # Add yum repository
           files: 
