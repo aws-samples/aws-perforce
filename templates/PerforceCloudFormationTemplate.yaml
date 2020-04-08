@@ -267,7 +267,7 @@ Resources:
               ignoreErrors: false
         04_config_install_sdp:
           sources:
-            /tmp: "https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/sdp.Unix.2019.3.26239.tgz"
+            /tmp: "https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/sdp.Unix.tgz"
           commands:
             01_mv_sdp:
               command: "mv /tmp/sdp /hxdepots"
@@ -294,24 +294,27 @@ Resources:
               command: "sed -i -e 's/OSGROUP=.*/OSGROUP=perforce/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             09_rewrite_config:
-              command: "sed -i -e 's/MAILHOST=.*/MAILHOST=localhost/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              command: "sed -i -e 's/CASE_SENSITIVE=.*/CASE_SENSITIVE=0/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             10_rewrite_config:
-              command: "sed -i -e 's/SSL_PREFIX=.*/SSL_PREFIX=/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              command: "sed -i -e 's/MAILHOST=.*/MAILHOST=localhost/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             11_rewrite_config:
-              command: "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=ip-10-0-0-63.ap-northeast-1.compute.internal/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              command: "sed -i -e 's/SSL_PREFIX=.*/SSL_PREFIX=/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             12_rewrite_config:
+              command: "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=ip-10-0-0-63.ap-northeast-1.compute.internal/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            13_rewrite_config:
               command: "sed -i -e 's/COMPLAINFROM_DOMAIN=.*/COMPLAINFROM_DOMAIN=amazonaws.com/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
-            13_create_symlink:
+            14_create_symlink:
               command: "ln -s /opt/perforce/bin/p4 /hxdepots/sdp/Server/Unix/p4/common/bin/p4"
               ignoreErrors: false
-            14_create_symlink:
+            15_create_symlink:
               command: "ln -s /opt/perforce/sbin/p4d /hxdepots/sdp/Server/Unix/p4/common/bin/p4d"
               ignoreErrors: false
-            15_setup_sdp:
+            16_setup_sdp:
               command: "/hxdepots/sdp/Server/Unix/setup/mkdirs.sh 1"
               ignoreErrors: false
         05_config_start_helix-p4d:
