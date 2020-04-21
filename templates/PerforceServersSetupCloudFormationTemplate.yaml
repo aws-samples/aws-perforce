@@ -1,0 +1,293 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Create Perforce Servers"
+
+Parameters: 
+  InstanceType: 
+    Type: String
+    Default: c5.4xlarge
+    AllowedValues:
+      - t3.nano
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - r5.large
+      - r5.xlarge
+      - r5.2xlarge
+      - r5.4xlarge
+      - r5.8xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.8xlarge
+    Description: "Select Perforce server EC2 instance type. Default is c5.4xlarge."
+  KeyPairName:
+    Description: "Public/private key pairs allow you to securely connect to your instance after it launches"
+    Type: AWS::EC2::KeyPair::KeyName
+  LatestAmiId:
+    Type: "String"
+  EnableReplica:
+    Type: String
+    Default: "No"
+    AllowedValues: 
+      - "Yes"
+      - "No"
+    Description: "If you build Perforce Replica Server, select Yes. Replica Server will be the same setting as Master server."
+  ServerName:
+    Type: "String"
+  ServerDescription:
+    Type: "String"
+  ServerID:
+    Type: "String"
+  VolumeHxdepots:
+    Type: "String"
+  VolumeHxlogs:
+    Type: "String"
+  VolumeHxmetadata:
+    Type: "String"
+  SubnetId:
+    Type: "String"
+  PrivateIpAddress:
+    Type: "String"
+  PerforceSecurityGroup:
+    Type: "String"
+  gw1:
+    Type: "String"
+
+Conditions: 
+  CreateReplicaServer: !Equals [ !Ref EnableReplica, "Yes" ]
+
+Resources:
+  PerforceEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  PerforceServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      DisableApiTermination: 'false'
+      InstanceInitiatedShutdownBehavior: stop
+      EbsOptimized: 'true'
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      Monitoring: 'true'
+      Tags:
+      - Key: Name
+        Value: !Ref ServerName
+      - Key: Description
+        Value: !Ref ServerDescription
+      - Key: ServerID
+        Value: !Ref ServerID
+      Volumes:
+      - Device: /dev/sdb
+        VolumeId: !Ref VolumeHxdepots
+      - Device: /dev/sdc
+        VolumeId: !Ref VolumeHxlogs
+      - Device: /dev/sdd
+        VolumeId: !Ref VolumeHxmetadata
+      NetworkInterfaces:
+      - DeleteOnTermination: 'true'
+        Description: Primary network interface
+        DeviceIndex: 0
+        SubnetId: !Ref SubnetId
+        PrivateIpAddresses:
+        - PrivateIpAddress: !Ref PrivateIpAddress
+          Primary: 'true'
+        GroupSet:
+        - !Ref PerforceSecurityGroup
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash
+          # Install packages 
+          yum -y update
+
+          yum -y install aws-cfn-bootstrap
+          # Install the files and packages from the metadata
+          # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-init.html
+          /opt/aws/bin/cfn-init -v --configsets default --stack ${AWS::StackName} --resource PerforceServerInstance --region ${AWS::Region}
+          # Signal the status from cfn-init
+          # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-signal.html
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource PerforceServerInstance --region ${AWS::Region} 
+
+    Metadata:
+      # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+      AWS::CloudFormation::Init:
+        configSets: 
+          default: 
+            - "01_config_setup_volumes"
+            - "02_config_setup_yum_repo"
+            - "03_config_helix-p4d"
+            - "04_config_install_sdp"
+            - "05_config_start_helix-p4d"
+        01_config_setup_volumes:
+          commands:
+            # Mount hxdepots
+            01_setup_hxdepots:
+              command: "mkfs -t xfs /dev/sdb && mkdir /hxdepots && mount /dev/sdb /hxdepots"
+              ignoreErrors: false
+            # Mount hxlogs
+            02_setup_hxlogs:
+              command: "mkfs -t xfs /dev/sdc && mkdir /hxlogs && mount /dev/sdc /hxlogs"
+              ignoreErrors: false
+            # Mount hxmetadata
+            03_setup_hxmetadata:
+              command: "mkfs -t xfs /dev/sdd && mkdir /hxmetadata && mount /dev/sdd /hxmetadata"
+              ignoreErrors: false
+            # Configure /etc/fstab
+            04_add_config_to_fstab:
+              command: blkid /dev/sdb | awk -v OFS="   " '{print $2,"/hxdepots","xfs","defaults,nofail","0","2"}' >> /etc/fstab
+              ignoreErrors: false
+            05_add_config_to_fstab:
+              command: blkid /dev/sdc | awk -v OFS="   " '{print $2,"/hxlogs","xfs","defaults,nofail","0","2"}' >> /etc/fstab
+              ignoreErrors: false
+            06_add_config_to_fstab:
+              command: blkid /dev/sdd | awk -v OFS="   " '{print $2,"/hxmetadata","xfs","defaults,nofail","0","2"}' >> /etc/fstab
+              ignoreErrors: false
+        02_config_setup_yum_repo:
+          # Add yum repository
+          files: 
+            /etc/yum.repos.d/perforce.repo: 
+              content: !Sub | 
+                [perforce]
+                name=Perforce
+                baseurl=http://package.perforce.com/yum/rhel/7/x86_64/
+                enabled=1
+                gpgcheck=1
+              mode: "000644"
+              owner: "root"
+              group: "root"
+          commands:
+            01_import_pubkey:
+              command: "rpm --import https://package.perforce.com/perforce.pubkey"
+              ignoreErrors: false
+        03_config_helix-p4d:
+          packages:
+            yum:
+              helix-p4d: []
+          commands:
+            01_adduser_p4admin:
+              command: "adduser -g perforce -G adm,wheel p4admin"
+              ignoreErrors: false
+            02_mkdir_p4admin_dir:
+              command: "mkdir /home/p4admin/.ssh"
+              ignoreErrors: false
+            03_cp_key:
+              command: "cp /home/ec2-user/.ssh/authorized_keys /home/p4admin/.ssh"
+              ignoreErrors: false
+            04_chown:
+              command: "chown p4admin:perforce --recursive /home/p4admin/.ssh"
+              ignoreErrors: false
+            05_chmod:
+              command: "chmod 700 /home/p4admin/.ssh"
+              ignoreErrors: false
+            06_chmod:
+              command: "chmod 600 /home/p4admin/.ssh/authorized_keys"
+              ignoreErrors: false
+            07_allow_p4admin_sudo:
+              command: "echo 'p4admin         ALL=(ALL)       NOPASSWD: ALL' >> /etc/sudoers"
+              ignoreErrors: false
+        04_config_install_sdp:
+          sources:
+            /tmp: "https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/sdp.Unix.tgz"
+          commands:
+            01_mv_sdp:
+              command: "mv /tmp/sdp /hxdepots"
+              ignoreErrors: false
+            02_backup_config:
+              command: "cp /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg.bak"
+              ignoreErrors: false
+            03_rewrite_config:
+              command: "sudo sed -i -e 's/DB1=.*/DB1=hxmetadata/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            04_rewrite_config:
+              command: "sed -i -e 's/DB2=.*/DB2=hxmetadata/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            05_rewrite_config:
+              command: "sed -i -e 's/DD=.*/DD=hxdepots/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            06_rewrite_config:
+              command: "sed -i -e 's/LG=.*/LG=hxlogs/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            07_rewrite_config:
+              command: "sed -i -e 's/OSUSER=.*/OSUSER=p4admin/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            08_rewrite_config:
+              command: "sed -i -e 's/OSGROUP=.*/OSGROUP=perforce/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            09_rewrite_config:
+              command: "sed -i -e 's/CASE_SENSITIVE=.*/CASE_SENSITIVE=0/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            10_rewrite_config:
+              command: "sed -i -e 's/MAILHOST=.*/MAILHOST=localhost/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            11_rewrite_config:
+              command: "sed -i -e 's/SSL_PREFIX=.*/SSL_PREFIX=/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            12_rewrite_config:
+              command: "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=ip-10-0-0-63.ap-northeast-1.compute.internal/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            13_rewrite_config:
+              command: "sed -i -e 's/COMPLAINFROM_DOMAIN=.*/COMPLAINFROM_DOMAIN=amazonaws.com/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              ignoreErrors: false
+            14_create_symlink:
+              command: "ln -s /opt/perforce/bin/p4 /hxdepots/sdp/Server/Unix/p4/common/bin/p4"
+              ignoreErrors: false
+            15_create_symlink:
+              command: "ln -s /opt/perforce/sbin/p4d /hxdepots/sdp/Server/Unix/p4/common/bin/p4d"
+              ignoreErrors: false
+            16_setup_sdp:
+              command: "/hxdepots/sdp/Server/Unix/setup/mkdirs.sh 1"
+              ignoreErrors: false
+        05_config_start_helix-p4d:
+          files: 
+            /etc/systemd/system/p4d_1.service: 
+              content: !Sub | 
+                [Unit]
+                Description=Helix Server Instance 1
+                Documentation=http://www.perforce.com/perforce/doc.current/manuals/p4sag/index.html
+                Requires=network.target network-online.target
+                After=network.target network-online.target
+
+                [Service]
+                Type=forking
+                TimeoutStartSec=60s
+                TimeoutStopSec=60s
+                ExecStart=/p4/1/bin/p4d_1_init start
+                ExecStop=/p4/1/bin/p4d_1_init stop
+                User=p4admin
+
+                [Install]
+                WantedBy=multi-user.target
+              mode: "000400"
+              owner: "p4admin"
+              group: "perforce"
+          commands:
+            01_enable_daemon:
+              command: "systemctl enable p4d_1"
+              ignoreErrors: false
+            02_start_daemon:
+              command: "systemctl start p4d_1"
+              ignoreErrors: false
+            03_configure_server:
+              command: "/hxdepots/sdp/Server/setup/configure_new_server.sh 1"
+              ignoreErrors: false
+          
+  assocEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - PerforceEIP
+        - AllocationId
+      InstanceId: !Ref PerforceServerInstance
+              
+Outputs:
+  EC2InstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref PerforceServerInstance
