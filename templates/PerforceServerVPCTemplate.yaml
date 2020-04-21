@@ -1,0 +1,256 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Perforce-server-vpc-template"
+
+
+Resources:
+  PerforceVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      InstanceTenancy: default
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'false'
+      Tags:
+      - Key: Name
+        Value: Perforce
+  PerforcePublicSubnetMaster:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: ap-northeast-1a
+      VpcId:
+        Ref: PerforceVPC
+      Tags:
+      - Key: Name
+        Value: Perforce-Public-Subnet-Master
+  PerforcePublicSubnetReplica:
+    Type: AWS::EC2::Subnet
+    Condition: CreateReplicaServer
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: ap-northeast-1c
+      VpcId:
+        Ref: PerforceVPC
+      Tags:
+      - Key: Name
+        Value: Perforce-Public-Subnet-Replica
+  PerforceIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: Public-Perforce
+  dopt06d06862:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: ap-northeast-1.compute.internal
+      DomainNameServers:
+      - AmazonProvidedDNS
+  PerforceNACL:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: PerforceVPC
+  PerforceRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: PerforceVPC
+
+  VolumeHxlogsMaster:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      Size:
+        Ref: LogVolumeSize
+      VolumeType: gp2
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-01-hxlogs
+      - Key: ServerID
+        Value: master.1
+  VolumeHxdepotsMaster:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      Encrypted: true
+      Size:
+        Ref: DepotVolumeSize
+      VolumeType:
+        Ref: DepotVolumeType
+      Tags:
+      - Key: ServerID
+        Value: master.1
+      - Key: Name
+        Value: p4-awsnva-01-hxdepots
+  VolumeHxmetadataMaster:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      Size:
+        Ref: MetadataVolumeSize
+      VolumeType:
+        Ref: MetadataVolumeType
+      Iops:
+        Ref: MetadataProvisionedIops
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-01-hxmetadata
+      - Key: ServerID
+        Value: master.1
+  VolumeHxlogsReplica:
+    Type: AWS::EC2::Volume
+    Condition: CreateReplicaServer
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      Size:
+        Ref: LogVolumeSize
+      VolumeType: gp2
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-02-hxlogs
+      - Key: ServerID
+        Value: p4d-ha-awsnva
+  VolumeHxdepotsReplica:
+    Type: AWS::EC2::Volume
+    Condition: CreateReplicaServer
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      Encrypted: true
+      Size:
+        Ref: DepotVolumeSize
+      VolumeType:
+        Ref: DepotVolumeType
+      Tags:
+      - Key: ServerID
+        Value: p4d-ha-awsnva
+      - Key: Name
+        Value: p4-awsnva-02-hxdepots
+  VolumeHxmetadataReplica:
+    Type: AWS::EC2::Volume
+    Condition: CreateReplicaServer
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      Size:
+        Ref: MetadataVolumeSize
+      VolumeType:
+        Ref: MetadataVolumeType
+      Iops:
+        Ref: MetadataProvisionedIops
+      Tags:
+      - Key: Name
+        Value: p4-awsnva-02-hxmetadata
+      - Key: ServerID
+        Value: p4d-ha-awsnva
+  sgPerforceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: This security group is for Perforce.
+      VpcId:
+        Ref: PerforceVPC
+  acl1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: 'true'
+      Protocol: '-1'
+      RuleAction: allow
+      RuleNumber: '100'
+      NetworkAclId:
+        Ref: PerforceNACL
+  acl2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Protocol: '-1'
+      RuleAction: allow
+      RuleNumber: '100'
+      NetworkAclId:
+        Ref: PerforceNACL
+  subnetacl1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId:
+        Ref: PerforceNACL
+      SubnetId:
+        Ref: PerforcePublicSubnetMaster
+  subnetacl2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Condition: CreateReplicaServer
+    Properties:
+      NetworkAclId:
+        Ref: PerforceNACL
+      SubnetId:
+        Ref: PerforcePublicSubnetReplica
+  gw1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: PerforceVPC
+      InternetGatewayId:
+        Ref: PerforceIGW
+  route1:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId:
+        Ref: PerforceRouteTable
+      GatewayId:
+        Ref: PerforceIGW
+    DependsOn: gw1
+  subnetrtbassoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId:
+        Ref: PerforceRouteTable
+      SubnetId:
+        Ref: PerforcePublicSubnetMaster
+  subnetrtbassoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateReplicaServer
+    Properties: 
+      RouteTableId:
+        Ref: PerforceRouteTable
+      SubnetId:
+        Ref: PerforcePublicSubnetReplica
+  dchpassoc1:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId:
+        Ref: PerforceVPC
+      DhcpOptionsId:
+        Ref: dopt06d06862
+  ingress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '22'
+      ToPort: '22'
+      CidrIp: 0.0.0.0/0
+  ingress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '443'
+      ToPort: '443'
+      CidrIp: 0.0.0.0/0
+  ingress3:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '1666'
+      ToPort: '1666'
+      CidrIp: 0.0.0.0/0
+  egress1:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId:
+        Ref: sgPerforceSG
+      IpProtocol: '-1'
+      CidrIp: 0.0.0.0/0

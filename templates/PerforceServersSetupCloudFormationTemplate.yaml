@@ -38,17 +38,13 @@ Parameters:
       - "Yes"
       - "No"
     Description: "If you build Perforce Replica Server, select Yes. Replica Server will be the same setting as Master server."
+  PerforceAZ:
+    Type: "String"
   ServerName:
     Type: "String"
   ServerDescription:
     Type: "String"
   ServerID:
-    Type: "String"
-  VolumeHxdepots:
-    Type: "String"
-  VolumeHxlogs:
-    Type: "String"
-  VolumeHxmetadata:
     Type: "String"
   SubnetId:
     Type: "String"
@@ -58,18 +54,89 @@ Parameters:
     Type: "String"
   gw1:
     Type: "String"
-
-Conditions: 
-  CreateReplicaServer: !Equals [ !Ref EnableReplica, "Yes" ]
+  DepotVolumeType:
+    Type: String
+    Default: st1
+    AllowedValues: 
+      - st1
+      - gp2
+    Description: "Select either ST1 or GP2."
+  DepotVolumeSize:
+    Type: String
+    Default: '1024'
+    Description: "The size of the EBS volume attached for Depot."
+  LogVolumeSize:
+    Type: String
+    Default: '128'
+    Description: "The size of the EBS volume attached for Log."
+  MetadataVolumeType:
+    Type: String
+    Default: gp2
+    AllowedValues: 
+      - gp2
+      - io1
+    Description: "Select either GP2 or IO1."
+  MetadataVolumeSize:
+    Type: String
+    Default: '64'
+    Description: "The size of the EBS volume attached for Metadata."
+  MetadataProvisionedIops:
+    Type: "String"
+    ConstraintDescription: "Range is 100 to 64000 for Provisioned IOPS SSD volumes."
+    Description: "Set the provisioned IOPs between 100 and 64000. Only set if you are choosing io1 for your metadata volume type."
 
 Resources:
   PerforceEIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+  # Setup EBS volumes
+  VolumeHxlogs:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Ref PerforceAZ
+      Size:
+        Ref: LogVolumeSize
+      VolumeType: gp2
+      Tags:
+      - Key: Name
+        Value: !Sub ${ServerName}-hxlogs
+      - Key: ServerID
+        Value: !Ref ServerID
+  VolumeHxdepots:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Ref PerforceAZ
+      Encrypted: true
+      Size:
+        Ref: DepotVolumeSize
+      VolumeType:
+        Ref: DepotVolumeType
+      Tags:
+      - Key: ServerID
+        Value: !Ref ServerID
+      - Key: Name
+        Value: !Sub ${ServerName}-hxdepots
+  VolumeHxmetadata:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Ref PerforceAZ
+      Size:
+        Ref: MetadataVolumeSize
+      VolumeType:
+        Ref: MetadataVolumeType
+      Iops:
+        Ref: MetadataProvisionedIops
+      Tags:
+      - Key: Name
+        Value: !Sub ${ServerName}-hxmetadata
+      - Key: ServerID
+        Value: !Ref ServerID
+  # setup EC2 instance & perforce
   PerforceServerInstance:
     Type: AWS::EC2::Instance
     Properties:
+      AvailabilityZone: !Ref PerforceAZ
       DisableApiTermination: 'false'
       InstanceInitiatedShutdownBehavior: stop
       EbsOptimized: 'true'
@@ -230,7 +297,7 @@ Resources:
               command: "sed -i -e 's/SSL_PREFIX=.*/SSL_PREFIX=/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             12_rewrite_config:
-              command: "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=ip-10-0-0-63.ap-northeast-1.compute.internal/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
+              command: !Sub "sed -i -e 's/P4DNSNAME=.*/P4DNSNAME=ip-10-0-0-63.${AWS::Region}.compute.internal/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
               ignoreErrors: false
             13_rewrite_config:
               command: "sed -i -e 's/COMPLAINFROM_DOMAIN=.*/COMPLAINFROM_DOMAIN=amazonaws.com/g' /hxdepots/sdp/Server/Unix/setup/mkdirs.cfg"
