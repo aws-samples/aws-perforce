@@ -413,3 +413,11 @@ Resources:
         PrivateIpAddress: 10.0.1.63
         PerforceSecurityGroup: !Ref sgPerforceSG
         gw1: !Ref gw1
+
+Outputs:
+  PerforceMasterInstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !GetAtt PerforceMasterServerInstance.Outputs.EC2InstanceId
+  PerforceReplicaInstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !GetAtt PerforceReplicaServerInstance.Outputs.EC2InstanceId
