@@ -31,13 +31,6 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
   LatestAmiId:
     Type: "String"
-  EnableReplica:
-    Type: String
-    Default: "No"
-    AllowedValues: 
-      - "Yes"
-      - "No"
-    Description: "If you build Perforce Replica Server, select Yes. Replica Server will be the same setting as Master server."
   PerforceAZ:
     Type: "String"
   ServerName:

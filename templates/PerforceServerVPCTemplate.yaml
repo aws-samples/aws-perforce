@@ -1,6 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: "Perforce-server-vpc-template"
 
+Parameters:
+  EnableReplica:
+    Type: String
+    Default: "No"
+    AllowedValues: 
+      - "Yes"
+      - "No"
+    Description: "If you build Perforce Replica Server, select Yes. Replica Server will be the same setting as Master server."
+
+Conditions: 
+  CreateReplicaServer: !Equals [ !Ref EnableReplica, "Yes" ]
 
 Resources:
   PerforceVPC:
@@ -17,7 +28,9 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       CidrBlock: 10.0.0.0/24
-      AvailabilityZone: ap-northeast-1a
+      AvailabilityZone: !Select 
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'  
       VpcId:
         Ref: PerforceVPC
       Tags:
@@ -28,7 +41,9 @@ Resources:
     Condition: CreateReplicaServer
     Properties:
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: ap-northeast-1c
+      AvailabilityZone: !Select 
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'  
       VpcId:
         Ref: PerforceVPC
       Tags:
@@ -43,7 +58,7 @@ Resources:
   dopt06d06862:
     Type: AWS::EC2::DHCPOptions
     Properties:
-      DomainName: ap-northeast-1.compute.internal
+      DomainName: !Sub ${AWS::Region}.compute.internal
       DomainNameServers:
       - AmazonProvidedDNS
   PerforceNACL:
@@ -56,92 +71,6 @@ Resources:
     Properties:
       VpcId:
         Ref: PerforceVPC
-
-  VolumeHxlogsMaster:
-    Type: AWS::EC2::Volume
-    Properties:
-      AvailabilityZone: ap-northeast-1a
-      Size:
-        Ref: LogVolumeSize
-      VolumeType: gp2
-      Tags:
-      - Key: Name
-        Value: p4-awsnva-01-hxlogs
-      - Key: ServerID
-        Value: master.1
-  VolumeHxdepotsMaster:
-    Type: AWS::EC2::Volume
-    Properties:
-      AvailabilityZone: ap-northeast-1a
-      Encrypted: true
-      Size:
-        Ref: DepotVolumeSize
-      VolumeType:
-        Ref: DepotVolumeType
-      Tags:
-      - Key: ServerID
-        Value: master.1
-      - Key: Name
-        Value: p4-awsnva-01-hxdepots
-  VolumeHxmetadataMaster:
-    Type: AWS::EC2::Volume
-    Properties:
-      AvailabilityZone: ap-northeast-1a
-      Size:
-        Ref: MetadataVolumeSize
-      VolumeType:
-        Ref: MetadataVolumeType
-      Iops:
-        Ref: MetadataProvisionedIops
-      Tags:
-      - Key: Name
-        Value: p4-awsnva-01-hxmetadata
-      - Key: ServerID
-        Value: master.1
-  VolumeHxlogsReplica:
-    Type: AWS::EC2::Volume
-    Condition: CreateReplicaServer
-    Properties:
-      AvailabilityZone: ap-northeast-1c
-      Size:
-        Ref: LogVolumeSize
-      VolumeType: gp2
-      Tags:
-      - Key: Name
-        Value: p4-awsnva-02-hxlogs
-      - Key: ServerID
-        Value: p4d-ha-awsnva
-  VolumeHxdepotsReplica:
-    Type: AWS::EC2::Volume
-    Condition: CreateReplicaServer
-    Properties:
-      AvailabilityZone: ap-northeast-1c
-      Encrypted: true
-      Size:
-        Ref: DepotVolumeSize
-      VolumeType:
-        Ref: DepotVolumeType
-      Tags:
-      - Key: ServerID
-        Value: p4d-ha-awsnva
-      - Key: Name
-        Value: p4-awsnva-02-hxdepots
-  VolumeHxmetadataReplica:
-    Type: AWS::EC2::Volume
-    Condition: CreateReplicaServer
-    Properties:
-      AvailabilityZone: ap-northeast-1c
-      Size:
-        Ref: MetadataVolumeSize
-      VolumeType:
-        Ref: MetadataVolumeType
-      Iops:
-        Ref: MetadataProvisionedIops
-      Tags:
-      - Key: Name
-        Value: p4-awsnva-02-hxmetadata
-      - Key: ServerID
-        Value: p4d-ha-awsnva
   sgPerforceSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -254,3 +183,17 @@ Resources:
         Ref: sgPerforceSG
       IpProtocol: '-1'
       CidrIp: 0.0.0.0/0
+
+Outputs:
+  PerforceMasterSubnetId:
+    Description: "Newly created Public Subnet ID for Master"
+    Value: !Ref PerforcePublicSubnetMaster
+  PerforceReplicaSubnetId:
+    Description: "Newly created Public Subnet ID for Replica"
+    Value: !Ref PerforcePublicSubnetReplica
+  PerforceSecurityGroupId:
+    Description: "Newly created sercurity group ID for Perforce"
+    Value: !Ref sgPerforceSG
+  PerforceVPCGatewaySettingID:
+    Description: "VPC gateway setting for Perforce"
+    Value: !Ref gw1
