@@ -118,15 +118,46 @@ Parameters:
     ConstraintDescription: "Range is 100 to 64000 for Provisioned IOPS SSD volumes."
     Description: "Set the provisioned IOPs between 100 and 64000. Only set if you are choosing io1 for your metadata volume type."
     Type: "String"
+  QSS3BucketName:
+    AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
+    ConstraintDescription: |
+      Quick Start bucket name can include numbers, lowercase
+      letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Default: aws-quickstart
+    Description: | 
+      S3 bucket name for the Quick Start assets. Quick Start bucket name
+      can include numbers, lowercase letters, uppercase letters, and hyphens (-).
+      It cannot start or end with a hyphen (-).
+    Type: String
+  QSS3BucketRegion:
+    Default: 'us-east-1'
+    Description: 'The AWS Region where the Quick Start S3 bucket (QSS3BucketName) is hosted. When using your own bucket, you must specify this value.'
+    Type: String
+  QSS3KeyPrefix:
+    AllowedPattern: ^[0-9a-zA-Z-]+(/[0-9a-zA-Z-]+)*/
+    ConstraintDescription: |
+      Quick Start key prefix can include numbers, lowercase letters,
+      uppercase letters, hyphens (-), and forward slash (/). It cannot start with
+      forward slash (/) because it is automatically added.
+    Default: aws-perforce/
+    Description: |
+      S3 key prefix for the Quick Start assets. Quick Start key prefix can include
+      numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash
+      (/). It cannot start with forward slash (/) because it is automatically added.
+    Type: String
 
 Conditions: 
   CreateReplicaServer: !Equals [ !Ref EnableReplica, "Yes" ]
+  UsingDefaultBucket: !Equals [!Ref QSS3BucketName, 'aws-quickstart']
 
 Resources:
   PerforceVPCStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: "https://aws-hori.s3-ap-northeast-1.amazonaws.com/perforce/aws-perforce/templates/PerforceServerVPCTemplate.yaml"
+      TemplateURL: !Sub
+        - "https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/PerforceServerVPCTemplate.yaml"
+        - S3Region: !If [UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion]
+          S3Bucket: !If [UsingDefaultBucket, !Sub '${QSS3BucketName}-${AWS::Region}', !Ref QSS3BucketName]
       Parameters:
         EnableReplica: !Ref EnableReplica
 
@@ -134,7 +165,10 @@ Resources:
   PerforceMasterServerInstance:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: "https://aws-hori.s3-ap-northeast-1.amazonaws.com/perforce/aws-perforce/templates/PerforceServersSetupCloudFormationTemplate.yaml"
+      TemplateURL: !Sub
+        - "https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/PerforceServersSetupCloudFormationTemplate.yaml"
+        - S3Region: !If [UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion]
+          S3Bucket: !If [UsingDefaultBucket, !Sub '${QSS3BucketName}-${AWS::Region}', !Ref QSS3BucketName]
       Parameters:
         PerforceAZ: !Select 
           - 0
@@ -160,7 +194,10 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Condition: CreateReplicaServer
     Properties:
-      TemplateURL: "https://aws-hori.s3-ap-northeast-1.amazonaws.com/perforce/aws-perforce/templates/PerforceServersSetupCloudFormationTemplate.yaml"
+      TemplateURL: !Sub
+        - "https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/PerforceServersSetupCloudFormationTemplate.yaml"
+        - S3Region: !If [UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion]
+          S3Bucket: !If [UsingDefaultBucket, !Sub '${QSS3BucketName}-${AWS::Region}', !Ref QSS3BucketName]
       Parameters:
         PerforceAZ: !Select 
           - 1
@@ -187,5 +224,6 @@ Outputs:
     Description: InstanceId of the newly created EC2 instance
     Value: !GetAtt PerforceMasterServerInstance.Outputs.EC2InstanceId
   PerforceReplicaInstanceId:
+    Condition: CreateReplicaServer
     Description: InstanceId of the newly created EC2 instance
     Value: !GetAtt PerforceReplicaServerInstance.Outputs.EC2InstanceId

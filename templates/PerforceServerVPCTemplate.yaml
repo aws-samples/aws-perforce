@@ -189,6 +189,7 @@ Outputs:
     Description: "Newly created Public Subnet ID for Master"
     Value: !Ref PerforcePublicSubnetMaster
   PerforceReplicaSubnetId:
+    Condition: CreateReplicaServer
     Description: "Newly created Public Subnet ID for Replica"
     Value: !Ref PerforcePublicSubnetReplica
   PerforceSecurityGroupId:
