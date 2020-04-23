@@ -235,6 +235,13 @@ Resources:
         gw1: !GetAtt PerforceVPCStack.Outputs.PerforceVPCGatewaySettingID
 
 Outputs:
+  PerforceMasterEIP:
+    Description: Elasic IP Adress attached to Perforce Master server
+    Value: !GetAtt PerforceMasterServerInstance.Outputs.PerforceEIP
+  PerforceReplicaEIP:
+    Condition: CreateReplicaServer
+    Description: Elasic IP Adress attached to Perforce Replica server
+    Value: !GetAtt PerforceReplicaServerInstance.Outputs.PerforceEIP
   PerforceMasterInstanceId:
     Description: InstanceId of the newly created EC2 instance
     Value: !GetAtt PerforceMasterServerInstance.Outputs.EC2InstanceId

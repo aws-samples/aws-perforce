@@ -351,3 +351,6 @@ Outputs:
   EC2InstanceId:
     Description: InstanceId of the newly created EC2 instance
     Value: !Ref PerforceServerInstance
+  PerforceEIP:
+    Description: Elasic IP Adress attached to Perforce server
+    Value: !Ref PerforceEIP
