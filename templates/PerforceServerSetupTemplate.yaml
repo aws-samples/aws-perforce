@@ -77,6 +77,9 @@ Parameters:
     Type: "String"
     ConstraintDescription: "Range is 100 to 64000 for Provisioned IOPS SSD volumes."
     Description: "Set the provisioned IOPs between 100 and 64000. Only set if you are choosing io1 for your metadata volume type."
+  EC2Profile:
+    Type: "String"
+    Description: "EC2 proifile setting for IAM role"
 
 Resources:
   PerforceEIP:
@@ -137,6 +140,7 @@ Resources:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       Monitoring: 'true'
+      IamInstanceProfile: !Ref EC2Profile
       Tags:
       - Key: Name
         Value: !Ref ServerName
@@ -164,6 +168,8 @@ Resources:
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash
+          hostname ${ServerID}
+          
           # Install packages 
           yum -y update
 
@@ -334,10 +340,13 @@ Resources:
             02_start_daemon:
               command: "systemctl start p4d_1"
               ignoreErrors: false
-            03_configure_server:
+            03_set_serverID:
+              command: !Sub "echo ${ServerID} > /p4/1/root/server.id"
+              ignoreErrors: false
+            04_configure_server:
               command: "/hxdepots/sdp/Server/setup/configure_new_server.sh 1"
               ignoreErrors: false
-          
+        
   assocEIP:
     Type: AWS::EC2::EIPAssociation
     Properties:

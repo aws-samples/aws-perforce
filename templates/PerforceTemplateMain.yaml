@@ -204,6 +204,7 @@ Resources:
         PrivateIpAddress: 10.0.0.63
         PerforceSecurityGroup: !GetAtt PerforceVPCStack.Outputs.PerforceSecurityGroupId
         gw1: !GetAtt PerforceVPCStack.Outputs.PerforceVPCGatewaySettingID
+        EC2Profile: !GetAtt PerforceVPCStack.Outputs.EC2ProfileID
   # Create Perforce replica server if needed
   PerforceReplicaServerInstance:
     Type: AWS::CloudFormation::Stack
@@ -233,6 +234,7 @@ Resources:
         PrivateIpAddress: 10.0.1.63
         PerforceSecurityGroup: !GetAtt PerforceVPCStack.Outputs.PerforceSecurityGroupId
         gw1: !GetAtt PerforceVPCStack.Outputs.PerforceVPCGatewaySettingID
+        EC2Profile: !GetAtt PerforceVPCStack.Outputs.EC2ProfileID
 
 Outputs:
   PerforceMasterEIP:

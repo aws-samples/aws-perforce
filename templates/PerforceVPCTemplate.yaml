@@ -191,6 +191,30 @@ Resources:
         Ref: sgPerforceSG
       IpProtocol: '-1'
       CidrIp: 0.0.0.0/0
+  # Setting IAM Role for EC2 instance
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: "EC2 service role for S3 full access"
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - "ec2.amazonaws.com"
+          Action:
+            - "sts:AssumeRole"
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      RoleName: EC2RoleForS3Access
+  EC2Profile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref EC2Role
+      InstanceProfileName: EC2S3AcessProfile
 
 Outputs:
   PerforceMasterSubnetId:
@@ -206,3 +230,6 @@ Outputs:
   PerforceVPCGatewaySettingID:
     Description: "VPC gateway setting for Perforce"
     Value: !Ref gw1
+  EC2ProfileID:
+    Description: "EC2 profile setting for Perforce"
+    Value: !Ref EC2Profile
