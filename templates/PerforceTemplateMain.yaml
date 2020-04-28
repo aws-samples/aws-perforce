@@ -90,6 +90,7 @@ Parameters:
       - m5.8xlarge
     Description: "Select Perforce server EC2 instance type. Default is c5.4xlarge."
   KeyPairName:
+    ConstraintDescription: "You must specify the name of an existing EC2 KeyPair."
     Description: "Public/private key pairs allow you to securely connect to your instance after it launches"
     Type: AWS::EC2::KeyPair::KeyName
   LatestAmiId:

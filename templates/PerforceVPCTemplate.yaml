@@ -146,22 +146,17 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Condition: CreateReplicaServer
     Properties: 
-      RouteTableId:
-        Ref: PerforceRouteTable
-      SubnetId:
-        Ref: PerforcePublicSubnetReplica
+      RouteTableId: !Ref PerforceRouteTable
+      SubnetId: !Ref PerforcePublicSubnetReplica
   dchpassoc1:
     Type: AWS::EC2::VPCDHCPOptionsAssociation
     Properties:
-      VpcId:
-        Ref: PerforceVPC
-      DhcpOptionsId:
-        Ref: dopt06d06862
+      VpcId: !Ref PerforceVPC
+      DhcpOptionsId: !Ref dopt06d06862
   ingress1:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId:
-        Ref: sgPerforceSG
+      GroupId: !Ref sgPerforceSG
       IpProtocol: tcp
       FromPort: '22'
       ToPort: '22'
@@ -169,8 +164,7 @@ Resources:
   ingress2:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId:
-        Ref: sgPerforceSG
+      GroupId: !Ref sgPerforceSG
       IpProtocol: tcp
       FromPort: '443'
       ToPort: '443'
@@ -178,17 +172,23 @@ Resources:
   ingress3:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId:
-        Ref: sgPerforceSG
+      GroupId: !Ref sgPerforceSG
       IpProtocol: tcp
       FromPort: '1666'
       ToPort: '1666'
       CidrIp: !Ref AccessCIDR
+  ingress4:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '1666'
+      ToPort: '1666'
+      SourceSecurityGroupId: !Ref sgPerforceSG
   egress1:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
-      GroupId:
-        Ref: sgPerforceSG
+      GroupId: !Ref sgPerforceSG
       IpProtocol: '-1'
       CidrIp: 0.0.0.0/0
   # Setting IAM Role for EC2 instance
@@ -207,7 +207,7 @@ Resources:
       Path: /
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
-      RoleName: EC2RoleForS3Access
+      RoleName: PerforceEC2RoleForS3Access
   EC2Profile:
     Type: AWS::IAM::InstanceProfile
     Properties:
