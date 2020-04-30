@@ -182,6 +182,22 @@ Resources:
     Properties:
       GroupId: !Ref sgPerforceSG
       IpProtocol: tcp
+      FromPort: '22'
+      ToPort: '22'
+      SourceSecurityGroupId: !Ref sgPerforceSG
+  ingress5:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '443'
+      ToPort: '443'
+      SourceSecurityGroupId: !Ref sgPerforceSG
+  ingress6:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref sgPerforceSG
+      IpProtocol: tcp
       FromPort: '1666'
       ToPort: '1666'
       SourceSecurityGroupId: !Ref sgPerforceSG
