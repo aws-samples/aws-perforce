@@ -4,7 +4,7 @@ These AWS CloudFormation templates included with this sample deploy Perforce Hel
 
 Perforce is a proprietary version control system that features fast synchronized operation. It’s used mainly in development environments and is particularly popular in the game industry.
 
-Perforce and AWS also offer a free tier, Perforce Helix Core Studio Pack for AWS, which allows customers to start running Perforce on AWS. 
+Perforce and AWS also offer a free tier, [Perforce Helix Core Studio Pack for AWS](https://www.perforce.com/vcs/aws-studio-pack), which allows customers to start running Perforce on AWS. 
 
 The templates automate either of the following:
 
