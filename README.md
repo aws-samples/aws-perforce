@@ -13,7 +13,7 @@ The templates automate either of the following:
 
 You can also use the AWS CloudFormation templates as a starting point for your own implementation.
 
-![Perforce-servers-architecture](./images/Perforce-servers-architecture.png)
+![Perforce-servers-architecture](/images/Perforce-servers-architecture.png)
 
 ## License
 
@@ -28,11 +28,11 @@ Helix Core is a proprietary software and is subject to the terms and conditions 
 ## Deployment
 1. Sign in to the AWS console and click on Launch Stack below. This launches a CloudFormation stack in your AWS account. By default, the stack is launched in the us-west-2 (Oregon) region. If you want to launch it in a different region, change the region from the pull-down menu in the upper right corner of the management console.
 
-[![Launch Stack](./images/launchstack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/create/template?stackName=AWSPerforceTest&templateURL=https://gametech-cfn-templates-public.s3.amazonaws.com/aws-perforce/templates/PerforceTemplateMain.yaml) 
+[![Launch Stack](/images/launchstack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/create/template?stackName=AWSPerforceTest&templateURL=https://gametech-cfn-templates-public.s3.amazonaws.com/aws-perforce/templates/PerforceTemplateMain.yaml) 
 
-2. On the Specify template page, keep the default setting for the template URL, and then choose Next.
+2. On the **Specify template** page, keep the default setting for the template URL, and then choose Next.
 
-3. On the Specify stack details page, change the stack name if needed. By default, the stack name is **AWSperforceTest**. Review the parameters for the template. Especially provide the following items for the parameters that require input. For all other parameters, review the default settings and customize them as necessary. When you finish reviewing and customizing the parameters, choose Next.
+3. On the **Specify stack details** page, change the stack name if needed. By default, the stack name is **AWSPerforceTest**. Review the parameters for the template. Especially provide the following items for the parameters that require input. For all other parameters, review the default settings and customize them as necessary. When you finish reviewing and customizing the parameters, choose Next.
 
 * In **VPC Network Configuration**, **Permitted IP range** is configured to restrict access to the Perforce Server based on the source IPs. The default settings allow all IP addresses (0.0.0.0/0), but allowing only limited IP addresses is recommended for security reasons.
 
