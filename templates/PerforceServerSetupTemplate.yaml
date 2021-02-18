@@ -260,7 +260,7 @@ Resources:
               ignoreErrors: false
         04_config_install_sdp:
           sources:
-            /tmp: "https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/sdp.Unix.tgz"
+            /tmp: "https://swarm.workshop.perforce.com/downloads/guest/perforce_software/sdp/downloads/sdp.Unix.tgz?v=%2314"
           commands:
             01_mv_sdp:
               command: "mv /tmp/sdp /hxdepots"
